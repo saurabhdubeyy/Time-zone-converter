@@ -10,6 +10,23 @@
   --highlight-color: rgba(52, 152, 219, 0.2);
   --active-highlight: rgba(52, 152, 219, 0.4);
   --selection-color: rgba(231, 76, 60, 0.3);
+  --card-bg: white;
+}
+
+/* Dark Mode Variables */
+.dark-mode {
+  --primary-color: #4fa3e0;
+  --secondary-color: #3498db;
+  --accent-color: #e74c3c;
+  --light-bg: #1a1a2e;
+  --dark-bg: #121225;
+  --text-color: #f8f9fa;
+  --light-text: #f8f9fa;
+  --border-color: #444;
+  --highlight-color: rgba(52, 152, 219, 0.2);
+  --active-highlight: rgba(52, 152, 219, 0.4);
+  --selection-color: rgba(231, 76, 60, 0.3);
+  --card-bg: #242442;
 }
 
 * {
@@ -25,6 +42,7 @@ body {
   background-color: var(--light-bg);
   padding: 0;
   margin: 0;
+  transition: all 0.3s ease;
 }
 
 .container {
@@ -33,10 +51,17 @@ body {
   padding: 2rem;
 }
 
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
 h1 {
   text-align: center;
-  margin-bottom: 2rem;
   color: var(--primary-color);
+  margin: 0;
 }
 
 h3 {
@@ -63,13 +88,60 @@ button:disabled {
   cursor: not-allowed;
 }
 
-select {
+select, input {
   padding: 0.5rem;
   border: 1px solid var(--border-color);
   border-radius: 4px;
   margin-right: 0.5rem;
   width: 100%;
   max-width: 400px;
+  background-color: var(--card-bg);
+  color: var(--text-color);
+}
+
+/* Theme Toggle Button */
+.theme-toggle {
+  background: transparent;
+  border: none;
+  color: var(--text-color);
+  cursor: pointer;
+  padding: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.theme-toggle svg {
+  width: 24px;
+  height: 24px;
+  stroke: var(--primary-color);
+}
+
+/* Custom Time Section */
+.custom-time-section {
+  background-color: var(--card-bg);
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  margin-bottom: 2rem;
+}
+
+.custom-time-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+}
+
+.date-input, .time-input {
+  flex: 1;
+  min-width: 200px;
+}
+
+.date-input label, .time-input label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--text-color);
 }
 
 /* Timezone selector */
@@ -81,7 +153,7 @@ select {
 }
 
 .source-timezone, .additional-timezones {
-  background-color: white;
+  background-color: var(--card-bg);
   padding: 1.5rem;
   border-radius: 8px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
@@ -122,6 +194,7 @@ select {
   border-radius: 4px;
   margin-bottom: 0.5rem;
   background-color: var(--light-bg);
+  transition: background-color 0.3s ease;
 }
 
 .timezone-controls {
@@ -140,7 +213,7 @@ select {
 
 /* Timezone table */
 .timezone-display {
-  background-color: white;
+  background-color: var(--card-bg);
   padding: 1.5rem;
   border-radius: 8px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);

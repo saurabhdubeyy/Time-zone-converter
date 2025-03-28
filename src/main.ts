@@ -1,11 +1,30 @@
 import './style.css'
-import typescriptLogo from './typescript.svg'
-import viteLogo from '/vite.svg'
-import { setupCounter } from './counter.ts'
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div class="container">
-    <h1>Time Zone Converter</h1>
+    <header>
+      <h1>Time Zone Converter</h1>
+      <button id="dark-mode-toggle" class="theme-toggle">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+      </button>
+    </header>
+    
+    <div class="custom-time-section">
+      <h3>Custom Date & Time</h3>
+      <div class="custom-time-inputs">
+        <div class="date-input">
+          <label for="custom-date">Date:</label>
+          <input type="date" id="custom-date">
+        </div>
+        <div class="time-input">
+          <label for="custom-time">Time:</label>
+          <input type="time" id="custom-time">
+        </div>
+        <button id="apply-custom-time">Apply</button>
+      </div>
+    </div>
     
     <div class="timezone-selector">
       <div class="source-timezone">
@@ -37,5 +56,5 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 `
 
 // Initialize the application
-import { initializeApp } from './timeZoneConverter'
+import { initializeApp } from './timeZoneConverter.js'
 initializeApp()

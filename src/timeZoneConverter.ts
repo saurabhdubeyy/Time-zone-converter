@@ -30,25 +30,37 @@ const timeZones: TimeZone[] = [
 // Holds the selected timezones
 let selectedTimeZones: TimeZone[] = [];
 let sourceTimeZone: TimeZone | null = null;
+let customDate: Date | null = null;
 
 // Format a time (hour) as a 2-digit string with AM/PM
-function formatTime(hour: number): string {
+function formatTime(hour: number, minute: number = 0): string {
   const h = hour % 12 === 0 ? 12 : hour % 12;
   const ampm = hour < 12 ? 'AM' : 'PM';
-  return `${h}:00${ampm}`;
+  const minuteStr = minute < 10 ? `0${minute}` : minute;
+  return `${h}:${minuteStr}${ampm}`;
 }
 
 // Get time for a timezone based on UTC time
-function getTimeForTimeZone(utcHour: number, timezone: TimeZone): number {
-  const localHour = (utcHour + timezone.offset + 24) % 24;
-  return Math.floor(localHour);
+function getTimeForTimeZone(utcHour: number, utcMinute: number, timezone: TimeZone): { hour: number, minute: number } {
+  const totalMinutes = (utcHour * 60 + utcMinute) + (timezone.offset * 60);
+  let adjustedTotalMinutes = totalMinutes;
+  
+  if (adjustedTotalMinutes < 0) {
+    adjustedTotalMinutes += 24 * 60;
+  } else if (adjustedTotalMinutes >= 24 * 60) {
+    adjustedTotalMinutes -= 24 * 60;
+  }
+  
+  const hour = Math.floor(adjustedTotalMinutes / 60) % 24;
+  const minute = adjustedTotalMinutes % 60;
+  
+  return { hour, minute };
 }
 
 // Check if daylight saving time is in effect for a timezone based on current date
-function isDST(timezone: TimeZone): boolean {
+function isDST(timezone: TimeZone, date: Date = new Date()): boolean {
   // This is a simplified implementation
   // In a real app, this would use a proper timezone library like Luxon or Moment-Timezone
-  const date = new Date();
   const month = date.getMonth(); // 0-indexed (0 = January, 11 = December)
 
   // Northern Hemisphere DST roughly applies from March to November
@@ -65,8 +77,8 @@ function isDST(timezone: TimeZone): boolean {
 }
 
 // Adjust timezone offset for DST
-function adjustForDST(timezone: TimeZone): TimeZone {
-  if (!isDST(timezone)) {
+function adjustForDST(timezone: TimeZone, date: Date = new Date()): TimeZone {
+  if (!isDST(timezone, date)) {
     return timezone;
   }
 
@@ -109,10 +121,13 @@ function generateTimeGrid(): void {
   const headerRow = document.createElement('tr');
   headerRow.innerHTML = `<th>Time</th>`;
   
+  // Get reference date (either custom or current)
+  const referenceDate = customDate || new Date();
+  
   // Add column for each timezone
   const currentTimezones = [sourceTimeZone, ...selectedTimeZones];
   currentTimezones.forEach(timezone => {
-    const adjustedTz = adjustForDST(timezone);
+    const adjustedTz = adjustForDST(timezone, referenceDate);
     headerRow.innerHTML += `<th>${adjustedTz.abbreviation} (${adjustedTz.city || adjustedTz.name})</th>`;
   });
   
@@ -130,8 +145,8 @@ function generateTimeGrid(): void {
     
     // For each timezone, calculate the corresponding time
     currentTimezones.forEach((timezone, index) => {
-      const adjustedTz = adjustForDST(timezone);
-      const offsetFromSource = adjustedTz.offset - adjustForDST(sourceTimeZone!).offset;
+      const adjustedTz = adjustForDST(timezone, referenceDate);
+      const offsetFromSource = adjustedTz.offset - adjustForDST(sourceTimeZone!, referenceDate).offset;
       const tzHour = (hour + offsetFromSource + 24) % 24;
       const tzTime = formatTime(tzHour);
       
@@ -151,6 +166,65 @@ function generateTimeGrid(): void {
   
   // Add event listeners for selection
   setupTimeSelection();
+}
+
+// Generate time grid for custom date and time
+function generateCustomTimeGrid(customDateObj: Date, hour: number, minute: number): void {
+  const tableElement = document.getElementById('timezone-table');
+  if (!tableElement || !sourceTimeZone) return;
+
+  // Clear existing content
+  tableElement.innerHTML = '';
+
+  // Create the table structure
+  const table = document.createElement('table');
+  table.className = 'timezone-grid';
+
+  // Create header with date and time info
+  const customTimeInfo = document.createElement('div');
+  customTimeInfo.className = 'custom-time-info';
+  customTimeInfo.innerHTML = `<p>Showing conversions for: ${customDateObj.toLocaleDateString()} at ${formatTime(hour, minute)}</p>`;
+  tableElement.appendChild(customTimeInfo);
+
+  // Create header row with timezone names
+  const headerRow = document.createElement('tr');
+  headerRow.innerHTML = `<th>Timezone</th><th>Time</th>`;
+  table.appendChild(headerRow);
+
+  // Get source time in UTC
+  const sourceAdjustedTz = adjustForDST(sourceTimeZone, customDateObj);
+  const sourceOffsetHours = sourceAdjustedTz.offset;
+  
+  // Calculate UTC time
+  let utcHour = hour - sourceOffsetHours;
+  let utcMinute = minute;
+  
+  // Adjust if UTC hour is outside 0-23 range
+  if (utcHour < 0) {
+    utcHour += 24;
+  } else if (utcHour >= 24) {
+    utcHour -= 24;
+  }
+
+  // Add a row for each timezone
+  const currentTimezones = [sourceTimeZone, ...selectedTimeZones];
+  currentTimezones.forEach((timezone, index) => {
+    const row = document.createElement('tr');
+    row.className = index === 0 ? 'source-row' : '';
+    
+    const adjustedTz = adjustForDST(timezone, customDateObj);
+    const { hour: tzHour, minute: tzMinute } = getTimeForTimeZone(utcHour, utcMinute, adjustedTz);
+    const tzTime = formatTime(tzHour, tzMinute);
+    
+    row.innerHTML = `
+      <td class="timezone-name">${adjustedTz.abbreviation} (${adjustedTz.city || adjustedTz.name})</td>
+      <td class="time-cell">${tzTime}</td>
+    `;
+    
+    table.appendChild(row);
+  });
+  
+  tableElement.appendChild(table);
 }
 
 // Highlight times across all timezones for the same moment
@@ -230,11 +304,14 @@ function displaySelectionInfo(startHour: number, endHour: number): void {
   infoElement.className = 'selection-info';
   infoElement.innerHTML = '<h3>Selected Time Period</h3>';
   
+  // Get reference date (either custom or current)
+  const referenceDate = customDate || new Date();
+  
   const currentTimezones = [sourceTimeZone!, ...selectedTimeZones];
   
   currentTimezones.forEach(timezone => {
-    const adjustedTz = adjustForDST(timezone);
-    const offsetFromSource = adjustedTz.offset - adjustForDST(sourceTimeZone!).offset;
+    const adjustedTz = adjustForDST(timezone, referenceDate);
+    const offsetFromSource = adjustedTz.offset - adjustForDST(sourceTimeZone!, referenceDate).offset;
     
     const tzStartHour = (startHour + offsetFromSource + 24) % 24;
     const tzEndHour = (endHour + offsetFromSource + 24) % 24;
@@ -255,6 +332,45 @@ function displaySelectionInfo(startHour: number, endHour: number): void {
   const tableContainer = document.getElementById('timezone-table');
   if (tableContainer) {
     tableContainer.appendChild(infoElement);
+  }
+}
+
+// Toggle dark mode
+function toggleDarkMode(): void {
+  document.body.classList.toggle('dark-mode');
+  
+  // Save preference to localStorage
+  const isDarkMode = document.body.classList.contains('dark-mode');
+  localStorage.setItem('darkMode', isDarkMode ? 'enabled' : 'disabled');
+}
+
+// Apply custom time input
+function applyCustomTime(): void {
+  const dateInput = document.getElementById('custom-date') as HTMLInputElement;
+  const timeInput = document.getElementById('custom-time') as HTMLInputElement;
+  
+  if (!dateInput.value || !timeInput.value) {
+    alert('Please select both date and time');
+    return;
+  }
+  
+  const dateValue = dateInput.value; // Format: YYYY-MM-DD
+  const timeValue = timeInput.value; // Format: HH:MM
+  
+  const [hours, minutes] = timeValue.split(':').map(Number);
+  
+  // Create a Date object from the inputs
+  customDate = new Date(`${dateValue}T${timeValue}`);
+  
+  // Generate the time grid for the custom date and time
+  generateCustomTimeGrid(customDate, hours, minutes);
+}
+
+// Load dark mode preference
+function loadDarkModePreference(): void {
+  const darkMode = localStorage.getItem('darkMode');
+  if (darkMode === 'enabled') {
+    document.body.classList.add('dark-mode');
   }
 }
 
@@ -296,7 +412,8 @@ function updateTimeZoneList(): void {
     const item = document.createElement('div');
     item.className = 'timezone-item';
     
-    const adjustedTz = adjustForDST(timezone);
+    const referenceDate = customDate || new Date();
+    const adjustedTz = adjustForDST(timezone, referenceDate);
     
     item.innerHTML = `
       <span>${adjustedTz.abbreviation} - ${adjustedTz.name} ${adjustedTz.city ? `(${adjustedTz.city})` : ''}</span>
@@ -317,7 +434,14 @@ function updateTimeZoneList(): void {
         if (index > 0) {
           [selectedTimeZones[index - 1], selectedTimeZones[index]] = [selectedTimeZones[index], selectedTimeZones[index - 1]];
           updateTimeZoneList();
-          generateTimeGrid();
+          
+          if (customDate) {
+            const hours = customDate.getHours();
+            const minutes = customDate.getMinutes();
+            generateCustomTimeGrid(customDate, hours, minutes);
+          } else {
+            generateTimeGrid();
+          }
         }
       });
     }
@@ -327,7 +451,14 @@ function updateTimeZoneList(): void {
         if (index < selectedTimeZones.length - 1) {
           [selectedTimeZones[index], selectedTimeZones[index + 1]] = [selectedTimeZones[index + 1], selectedTimeZones[index]];
           updateTimeZoneList();
-          generateTimeGrid();
+          
+          if (customDate) {
+            const hours = customDate.getHours();
+            const minutes = customDate.getMinutes();
+            generateCustomTimeGrid(customDate, hours, minutes);
+          } else {
+            generateTimeGrid();
+          }
         }
       });
     }
@@ -336,7 +467,14 @@ function updateTimeZoneList(): void {
       removeButton.addEventListener('click', () => {
         selectedTimeZones.splice(index, 1);
         updateTimeZoneList();
-        generateTimeGrid();
+        
+        if (customDate) {
+          const hours = customDate.getHours();
+          const minutes = customDate.getMinutes();
+          generateCustomTimeGrid(customDate, hours, minutes);
+        } else {
+          generateTimeGrid();
+        }
       });
     }
     
@@ -348,37 +486,68 @@ function updateTimeZoneList(): void {
 function sortTimeZones(): void {
   if (!sourceTimeZone) return;
   
-  const sourceOffset = adjustForDST(sourceTimeZone).offset;
+  const referenceDate = customDate || new Date();
+  const sourceOffset = adjustForDST(sourceTimeZone, referenceDate).offset;
   
   selectedTimeZones.sort((a, b) => {
-    const offsetA = adjustForDST(a).offset - sourceOffset;
-    const offsetB = adjustForDST(b).offset - sourceOffset;
+    const offsetA = adjustForDST(a, referenceDate).offset - sourceOffset;
+    const offsetB = adjustForDST(b, referenceDate).offset - sourceOffset;
     return offsetA - offsetB;
   });
   
   updateTimeZoneList();
-  generateTimeGrid();
+  
+  if (customDate) {
+    const hours = customDate.getHours();
+    const minutes = customDate.getMinutes();
+    generateCustomTimeGrid(customDate, hours, minutes);
+  } else {
+    generateTimeGrid();
+  }
 }
 
 // Initialize the application
 export function initializeApp(): void {
+  // Load dark mode preference
+  loadDarkModePreference();
+  
   // Populate dropdowns
   populateTimeZoneDropdowns();
   
   // Set default source timezone (UTC)
   sourceTimeZone = timeZones[0];
   
+  // Set today's date in the date picker
+  const today = new Date();
+  const dateStr = today.toISOString().split('T')[0];
+  const timeStr = `${today.getHours().toString().padStart(2, '0')}:${today.getMinutes().toString().padStart(2, '0')}`;
+  
+  const dateInput = document.getElementById('custom-date') as HTMLInputElement;
+  const timeInput = document.getElementById('custom-time') as HTMLInputElement;
+  
+  if (dateInput) dateInput.value = dateStr;
+  if (timeInput) timeInput.value = timeStr;
+  
   // Add event listeners
   const sourceSelect = document.getElementById('source-timezone') as HTMLSelectElement;
   const addSelect = document.getElementById('add-timezone-select') as HTMLSelectElement;
   const addButton = document.getElementById('add-timezone-btn');
   const sortButton = document.getElementById('sort-btn');
+  const darkModeToggle = document.getElementById('dark-mode-toggle');
+  const applyCustomTimeBtn = document.getElementById('apply-custom-time');
   
   if (sourceSelect) {
     sourceSelect.addEventListener('change', () => {
       const selectedId = sourceSelect.value;
       sourceTimeZone = timeZones.find(tz => tz.id === selectedId) || null;
-      generateTimeGrid();
+      
+      if (customDate) {
+        const hours = customDate.getHours();
+        const minutes = customDate.getMinutes();
+        generateCustomTimeGrid(customDate, hours, minutes);
+      } else {
+        generateTimeGrid();
+      }
     });
   }
   
@@ -390,13 +559,28 @@ export function initializeApp(): void {
       if (selectedTz && !selectedTimeZones.some(tz => tz.id === selectedId)) {
         selectedTimeZones.push(selectedTz);
         updateTimeZoneList();
-        generateTimeGrid();
+        
+        if (customDate) {
+          const hours = customDate.getHours();
+          const minutes = customDate.getMinutes();
+          generateCustomTimeGrid(customDate, hours, minutes);
+        } else {
+          generateTimeGrid();
+        }
       }
     });
   }
   
   if (sortButton) {
     sortButton.addEventListener('click', sortTimeZones);
+  }
+  
+  if (darkModeToggle) {
+    darkModeToggle.addEventListener('click', toggleDarkMode);
+  }
+  
+  if (applyCustomTimeBtn) {
+    applyCustomTimeBtn.addEventListener('click', applyCustomTime);
   }
   
   // Initialize with a default additional timezone
